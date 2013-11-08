@@ -1,4 +1,4 @@
 fsm_engine
 ==========
 
-FSM_Engine
+FSMs can be created using XML.
