@@ -1,9 +1,8 @@
+import multiprocessing
 from multiprocessing import Queue
-#from multiprocessing import Process
 import xml.etree.ElementTree as ET
 import select
-#import random
-#import time
+import logging
 import sys
 
 READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
@@ -24,6 +23,15 @@ SOCK = 10
 STDIN = 15
 OBJ = 50
 FSMQ = 99
+
+
+class FSMObject(object):
+
+    def __init__(self):
+        self.fd = -1
+        self.obj = None
+        self.obj_type = None
+        self.dispatch_func = None
 
 
 class FSMException(Exception):
@@ -273,79 +281,132 @@ class FSM(object):
 
 class FsmEngine(object):
 
-    def __init__(self, dispatch, flags):
+    def __init__(self, dispatch=None, flags=None):
         self.q_dict = {}
         self.dispatch = dispatch
         self.flags = flags
         self.poller = select.poll()
 
+        self.__engineStarted = False
+
+        self.__init_log()
+
+    def __init_log(self):
+        # multiprocessing.log_to_stderr(logging.DEBUG)
+        multiprocessing.log_to_stderr()
+        self.logger = multiprocessing.get_logger()
+        self.logger.setLevel(logging.CRITICAL)
+
     def __idle(self):
+        # self.logger.debug("FsmEngine.__idle")
         pass
 
     def __collectStats(self):
+        # self.logger.debug("FsmEngine.__collectStats")
         pass
 
     def __getNewFSMId(self):
+        self.logger.debug("FsmEngine.__getNewFSMId")
         fsmid = [0]
         for obj_type, obj in self.q_dict.values():
             if obj_type == FSMQ:
                 fsmid.append(obj.getId())
 
-        return max(fsmid) + 1
+        new_fsmid = max(fsmid) + 1
+        self.logger.debug("FsmEngine.__getNewFSMId: new_fsmid: %d" % new_fsmid)
 
-    def __addfd(self, obj_type, fd, obj=None):
-        self.q_dict[fd] = (obj_type, obj)
-        self.poller.register(fd, READ_ONLY)
+        return new_fsmid
+
+    def __mk_FSMObject(self, obj_type, fd, obj=None, dispatch_func=None):
+        fsmObj = FSMObject()
+        fsmObj.fd = fd
+        fsmObj.obj = obj
+        fsmObj.obj_type = obj_type
+        fsmObj.dispatch_func = dispatch_func
+
+        return fsmObj
+
+    def __addfd(self, fsmObj):
+        self.logger.debug("FsmEngine.__addfd: Adding fd: %d; type: %d, obj: %s" %
+                          (fsmObj.fd, fsmObj.obj_type, fsmObj.obj))
+        self.q_dict[fsmObj.fd] = fsmObj
+        self.poller.register(fsmObj.fd, READ_ONLY)
 
     def __delfd(self, fd):
+        self.logger.debug("FsmEngine.__addfd: Deleting fd: %d" % fd)
         self.q_dict.pop(fd, None)
 
     def addFSM(self, fsm):
+        self.logger.info("FsmEngine.addFSM: Adding FSM %s" % fsm.name)
+
         # Check if the fsm_id is already present in the fsmEngine
         if fsm.getId() == 0:
             fsm.setId(self.__getNewFSMId())
-        self.__addfd(FSMQ, fsm.getQueueId(), fsm)
+
+        fsmObj = self.__mk_FSMObject(FSMQ, fsm.getQueueId(), fsm)
+        self.__addfd(fsmObj)
         fsm.setFsmEngine(self)
 
     def removeFSM(self, fsm):
+        self.logger.info("FsmEngine.removeFSM: Removing FSM %s" % fsm.name)
         self.__delfd(fsm.getQueueId())
 
-    def addSocket(self, sock):
-        self.__addfd(SOCK, sock)
+    def addSocket(self, sock, dispatch_func=None):
+        self.logger.info("FsmEngine.addSocket: Adding Socket %d" % sock)
+        fsmObj = self.__mk_FSMObject(SOCK, sock, None, dispatch_func)
+        self.__addfd(fsmObj)
 
     def removeSocket(self, sock):
+        self.logger.info("FsmEngine.removeSocket: Removing Socket %d" % sock)
         self.__delfd(sock)
 
     def addTimer(self, timer):
-        pass
+        self.logger.info("FsmEngine.addTimer: Adding Timer %d" % timer)
+        fsmObj = self.__mk_FSMObject(TMR, timer)
+        self.__addfd(fsmObj)
 
     def removeTimer(self, timer):
-        pass
+        self.logger.info("FsmEngine.removeTimer: Removing Timer %d" % timer)
+        self.__delfd(timer)
 
     def addObject(self, obj):
+        self.logger.info("FsmEngine.addObject: Adding Object %s" % obj.name)
         self.__addfd(OBJ, obj)
 
     def removeObject(self, obj):
-        self.__delfd(obj)
+        self.logger.info("FsmEngine.removeObject: Removing Object %c" % obj.name)
+        self.__delfd(obj.fd)
 
-    def addStdin(self):
-        self.__addfd(STDIN, sys.stdin.fileno())
+    def addStdin(self, dispatch_func=None):
+        self.logger.info("FsmEngine.addStdin: Adding STDIN")
+        fsmObj = self.__mk_FSMObject(STDIN, sys.stdin.fileno(), None, dispatch_func)
+        self.__addfd(fsmObj)
 
     def removeStdin(self):
+        self.logger.info("fsmEngine.removeStdin: Removing STDIN")
         self.__delfd(sys.stdin.fileno())
 
     def generateEvent(self, fsm, event, data=None):
+        self.logger.info("FsmEngine.generateEvent: Generating event to FSM: %s; event: %s" % (fsm.name, event))
         fsm.getQueue().put((event, data))
 
     def broadcaseEvent(self, event, data=None):
-        for obj_type, obj in self.q_dict.values():
-            if obj_type == FSMQ:
-                self.generateEvent(obj, event, data)
+        self.logger.info("fsmEngine.broadcaseEvent: Broadcasting event: %d" % event)
+        for fsmObj in self.q_dict.values():
+            if fsmObj.obj_type == FSMQ:
+                self.generateEvent(fsmObj, event, data)
 
     def start_engine(self):
+        self.logger.info("fsmEngine.start_engine")
+
+        self.__engineStarted = True
 
         while True:
-            events = self.poller.poll(TIMEOUT)
+            try:
+                events = self.poller.poll(TIMEOUT)
+            except KeyboardInterrupt:
+                exit()
+
             self.__collectStats()
 
             if len(events) == 0:
@@ -355,91 +416,12 @@ class FsmEngine(object):
             # TODO: sort the events based on priority
 
             for fd, flags in events:
-                obj_type, obj = self.q_dict[fd]
+                fsmObj = self.q_dict[fd]
 
-                if callable(self.dispatch):
-                    self.dispatch(obj_type, fd, flags)
+                if callable(fsmObj.dispatch_func):
+                    fsmObj.dispatch_func(fsmObj, flags)
+                elif callable(self.dispatch):
+                    self.dispatch(fsmObj, flags)
 
-                if obj_type == FSMQ:
-                    obj.dispatch(self)
-
-# def Worker(queue, timer):
-#    print "Starting Worker with queue: " + str(queue._reader.fileno()) + " with timer: " + str(timer)
-#    counter = 10
-#    time.sleep(timer)
-#
-#    while counter > 0:
-#        print "Sending data: " + str(counter) + " to Queue: " + str(queue._reader.fileno())
-# queue.put(random.randint(1, 5))
-#        queue.put(counter)
-#        time.sleep(timer)
-#        counter = counter - 1
-#
-#    print "Finished Worker with queue: " + str(queue._reader.fileno())
-
-
-#
-# Test 1
-#
-# def test1():
-#    jobs = []
-#    q = [ ]
-#    fsms = [ ]
-#    fe = FsmEngine(None, None)
-#    for idx in range(1, 5):
-#        print "idx: " + str(idx)
-#        f = FSM(idx)
-#        q.append(f.getQueue())
-#        fe.addFSM(f)
-#
-#        for idx in range (0, len(q)):
-#            proc = Process(target=Worker, args=(q[idx], random.randint(1, 5),))
-#            jobs.append(proc)
-#            proc.start()
-#
-#        fe.start_engine()
-#
-#        for job in jobs:
-# job.terminate()
-#            job.join()
-#
-# End of Test 2
-#
-
-
-
-#
-# Test 2
-#
-#f = FSM(0, 'calc', 'calc.xml')
-#
-#
-# def dispatch(fsmEngine, obj_type, fd, flags):
-#    global fe, f
-#
-#    print "dispatch -> obj_Type: " + str(obj_type) + " fd: " + str(fd) + " flags: " + str(flags)
-#
-#    data = raw_input()
-#
-#    if data in ['+', '-', '*', '/']:
-#        fsmEngine.generateEvent(f, 'OPERATOR', data)
-#    elif data.isdigit():
-#        fsmEngine.generateEvent(f, 'DIGIT', data)
-#    elif data == '=':
-#        fsmEngine.generateEvent(f, 'RESULT', data)
-#
-#
-# def test2():
-#    fe = FsmEngine(dispatch, None)
-#    fe.addFSM(f)
-#    fe.addStdin()
-#    fe.start_engine()
-#
-
-# End of Test 2
-#
-
-# if __name__ == '__main__':
-# test1()
-# test2()
-#    pass
+                if fsmObj.obj_type == FSMQ:
+                    fsmObj.obj.dispatch()

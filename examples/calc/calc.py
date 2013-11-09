@@ -1,7 +1,9 @@
+import sys
+sys.path.append('../../fsm_engine')
+
 import fsm_engine
 import termios
 import atexit
-import sys
 
 fd = sys.stdin.fileno()
 f = fsm_engine.FSM(0, 'calc', 'calc.xml')
@@ -21,16 +23,13 @@ def initialize():
     termios.tcsetattr(fd, termios.TCSAFLUSH, new_term)
 
 
-def dispatch(fd_type, fd, flags):
+def stdin_dispatch(fsmObj, flags):
     global f
 
-    print "dispatch -> Type: %s fd: %d flags: %d" % (fd_type, fd, flags)
-
-    if type != fsm_engine.STDIN:
-        return
+    #print "stdin_dispatch -> Type: %s fd: %d flags: %d" % (fsmObj.obj_type, fsmObj.fd, flags)
 
     data = sys.stdin.read(1)
-    print "Received: " + str(data)
+    #print "Received: " + str(data)
 
     if data in ['+', '-', '*', '/']:
         f.generateEvent(f, 'OPERATOR', data)
@@ -46,9 +45,9 @@ def main():
     atexit.register(set_normal_term)
     initialize()
 
-    fe = fsm_engine.FsmEngine(dispatch, None)
+    fe = fsm_engine.FsmEngine()
     fe.addFSM(f)
-    fe.addStdin()
+    fe.addStdin(stdin_dispatch)
     fe.start_engine()
 
 if __name__ == '__main__':
