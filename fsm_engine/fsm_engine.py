@@ -60,6 +60,8 @@ class FSMContext(object):
         self.curr_event = None
         self.next_state = None
 
+        self.data = None
+
 
 class FSM(object):
 
@@ -221,6 +223,10 @@ class FSM(object):
         self.__parseXML()
         self.__import_fsm_actions()
 
+    def generateInitialEvent(self):
+        if self.__init_event is not None:
+            self.fsmEngine.generateEvent(self, self.__init_event)
+
     def generateEvent(self, fsm, event, data=None):
         self.fsmEngine.generateEvent(fsm, event, data)
 
@@ -295,7 +301,7 @@ class FsmEngine(object):
         # multiprocessing.log_to_stderr(logging.DEBUG)
         multiprocessing.log_to_stderr()
         self.logger = multiprocessing.get_logger()
-        self.logger.setLevel(logging.CRITICAL)
+        self.logger.setLevel(logging.DEBUG)
 
     def __idle(self):
         # self.logger.debug("FsmEngine.__idle")
@@ -308,9 +314,9 @@ class FsmEngine(object):
     def __getNewFSMId(self):
         self.logger.debug("FsmEngine.__getNewFSMId")
         fsmid = [0]
-        for obj_type, obj in self.q_dict.values():
-            if obj_type == FSMQ:
-                fsmid.append(obj.getId())
+        for obj in self.q_dict.values():
+            if obj.obj_type == FSMQ:
+                fsmid.append(obj.obj.getId())
 
         new_fsmid = max(fsmid) + 1
         self.logger.debug("FsmEngine.__getNewFSMId: new_fsmid: %d" % new_fsmid)
@@ -327,14 +333,15 @@ class FsmEngine(object):
         return fsmObj
 
     def __addfd(self, fsmObj):
-        self.logger.debug("FsmEngine.__addfd: Adding fd: %d; type: %d, obj: %s" %
+        self.logger.debug("FsmEngine.__addfd: Adding fd: %s; type: %d, obj: %s" %
                           (fsmObj.fd, fsmObj.obj_type, fsmObj.obj))
         self.q_dict[fsmObj.fd] = fsmObj
         self.poller.register(fsmObj.fd, READ_ONLY)
 
     def __delfd(self, fd):
-        self.logger.debug("FsmEngine.__addfd: Deleting fd: %d" % fd)
+        self.logger.debug("FsmEngine.__addfd: Deleting fd: %s" % fd)
         self.q_dict.pop(fd, None)
+        self.poller.unregister(fd)
 
     def addFSM(self, fsm):
         self.logger.info("FsmEngine.addFSM: Adding FSM %s" % fsm.name)
@@ -346,18 +353,19 @@ class FsmEngine(object):
         fsmObj = self.__mk_FSMObject(FSMQ, fsm.getQueueId(), fsm)
         self.__addfd(fsmObj)
         fsm.setFsmEngine(self)
+        fsm.generateInitialEvent()
 
     def removeFSM(self, fsm):
         self.logger.info("FsmEngine.removeFSM: Removing FSM %s" % fsm.name)
         self.__delfd(fsm.getQueueId())
 
     def addSocket(self, sock, dispatch_func=None):
-        self.logger.info("FsmEngine.addSocket: Adding Socket %d" % sock)
-        fsmObj = self.__mk_FSMObject(SOCK, sock, None, dispatch_func)
+        self.logger.info("FsmEngine.addSocket: Adding Socket %s" % sock)
+        fsmObj = self.__mk_FSMObject(SOCK, sock.fileno(), sock, dispatch_func)
         self.__addfd(fsmObj)
 
     def removeSocket(self, sock):
-        self.logger.info("FsmEngine.removeSocket: Removing Socket %d" % sock)
+        self.logger.info("FsmEngine.removeSocket: Removing Socket %s" % sock)
         self.__delfd(sock)
 
     def addTimer(self, timer):
@@ -416,6 +424,7 @@ class FsmEngine(object):
             # TODO: sort the events based on priority
 
             for fd, flags in events:
+                self.logger.debug("fsmEngine.start_engine: fd: %s; flags: %d" % (fd, flags))
                 fsmObj = self.q_dict[fd]
 
                 if callable(fsmObj.dispatch_func):
