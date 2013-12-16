@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<fsm name='proxy'>
+    <import>proxy_actions</import>
+    <states prefix="">
+        <init>INIT</init>
+        <state>INIT</state>
+        <state>GetRequest</state>
+        <state>ProxyInit</state>
+    </states>
+    <events prefix="">
+        <!--<init>NewConnection</init>-->
+        <event>NewConnection</event>
+        <event>DataReceived</event>
+        <event>CreateProxy</event>
+    </events>
+    <actions prefix="">
+        <action>dispatch</action>
+        <action>newConnection</action>
+        <action>processRequest</action>
+        <action>createProxy</action>
+    </actions>
+    <tables>
+        <table state='INIT' event='NewConnection' action='newConnection' next_state='GetRequest'/>
+        <table state='GetRequest' event='DataReceived' action='processRequest' next_state='GetRequest'/>
+        <table state='GetRequest' event='CreateProxy' action='createProxy' next_state='ProxyInit'/>
+        <table state='Any' event='Any' action='log' next_state='Same'/>
+    </tables>
+</fsm>

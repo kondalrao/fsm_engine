@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<fsm name='temp'>
+<fsm name='calc'>
     <import>calc_actions</import>
     <states prefix="">
         <init>DIGIT1</init>
@@ -23,6 +23,7 @@
         <table state='DIGIT1' event='OPERATOR' action='operator' next_state='DIGIT2'/>
         <table state='DIGIT2' event='DIGIT' action='operand2' next_state='DIGIT2'/>
         <table state='DIGIT2' event='RESULT' action='result' next_state='DIGIT1'/>
+        <table state='Any' event='WS' action='null' next_state='Same'/>
         <table state='Any' event='Any' action='log' next_state='Same'/>
     </tables>
 </fsm>

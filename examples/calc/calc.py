@@ -1,12 +1,14 @@
+__author__ = 'Kondal'
 import sys
 sys.path.append('../../fsm_engine')
 
 import fsm_engine
+import fsm
 import termios
 import atexit
 
 fd = sys.stdin.fileno()
-f = fsm_engine.FSM(0, 'calc', 'calc.xml')
+
 
 old_term = termios.tcgetattr(fd)
 
@@ -23,31 +25,35 @@ def initialize():
     termios.tcsetattr(fd, termios.TCSAFLUSH, new_term)
 
 
-def stdin_dispatch(fsmObj, flags):
-    global f
+def stdin_dispatch(fsmObj):
+    fsm = fsmObj.fsm
 
-    #print "stdin_dispatch -> Type: %s fd: %d flags: %d" % (fsmObj.obj_type, fsmObj.fd, flags)
+    # print "stdin_dispatch -> Type: %s fd: %d flags: %d" % (fsmObj.obj_type, fsmObj.fd, flags)
 
     data = sys.stdin.read(1)
-    #print "Received: " + str(data)
+    # print "Received: " + str(data)
 
     if data in ['+', '-', '*', '/']:
-        f.generateEvent(f, 'OPERATOR', data)
+        fsm.generate_local_event('OPERATOR', data)
     elif data.isdigit():
-        f.generateEvent(f, 'DIGIT', data)
+        fsm.generate_local_event('DIGIT', data)
     elif data.isspace():
-        f.generateEvent(f, 'WS')
+        fsm.generate_local_event('WS')
     elif data == '=' or data == '\n':
-        f.generateEvent(f, 'RESULT', data)
+        fsm.generate_local_event('RESULT', data)
 
 
 def main():
     atexit.register(set_normal_term)
     initialize()
 
+    f = fsm.FSM(xml_file='calc.xml')
+    stdin_fsm_obj = fsm.FSMObject(sys.stdin.fileno(), fsm.STDIN, f, None, stdin_dispatch)
+    f.add_fsm_object(stdin_fsm_obj)
+
     fe = fsm_engine.FsmEngine()
-    fe.addFSM(f)
-    fe.addStdin(stdin_dispatch)
+
+    fe.add_fsm(f)
     fe.start_engine()
 
 if __name__ == '__main__':
