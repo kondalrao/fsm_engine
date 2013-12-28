@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<fsm name='calc'>
+    <import>simple_calc_actions</import>
+    <states prefix="">
+        <init>DIGIT1</init>
+        <state>DIGIT1</state>
+        <state>DIGIT2</state>
+    </states>
+    <events prefix="">
+        <event>DIGIT</event>
+        <event>OPERATOR</event>
+        <event>WS</event>
+        <event>RESULT</event>
+    </events>
+    <actions prefix="">
+        <action>operand1</action>
+        <action>operand2</action>
+        <action>operator</action>
+        <action>result</action>
+    </actions>
+    <tables>
+        <table state='DIGIT1' event='DIGIT' action='operand1' next_state='DIGIT1'/>
+        <table state='DIGIT1' event='OPERATOR' action='operator' next_state='DIGIT2'/>
+        <table state='DIGIT2' event='DIGIT' action='operand2' next_state='DIGIT2'/>
+        <table state='DIGIT2' event='RESULT' action='result' next_state='DIGIT1'/>
+        <table state='Any' event='WS' action='null' next_state='Same'/>
+        <table state='Any' event='Any' action='log' next_state='Same'/>
+    </tables>
+</fsm>
