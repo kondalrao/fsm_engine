@@ -13,7 +13,7 @@ class FSM_BASE(object):
         self.fd = None
 
         self.fsm_engine = None
-        self.timer = FSMTimer()
+        #self.timer = FSMTimer()
 
         self.context = FSMContext(self)
 
@@ -121,7 +121,6 @@ class FSM(FSM_BASE):
         self.__parse_xml(self.fsm_file)
         self.__import_fsm_actions()
 
-
     def __parse_xml(self, fsm_file=None):
         """
         Parse the xml file gathering states, events, actions and
@@ -188,6 +187,37 @@ class FSM(FSM_BASE):
 
         raise FSMException("Invalid event %s in state %s" % (event, state))
 
+    def add_state(self, state):
+        if self.__states.has_key(state):
+            raise FSMException("Duplicate state %s" % (state))
+        else:
+            self.__states[state] = state
+
+    def add_event(self, event):
+        if self.__events.has_key(event):
+            raise FSMException("Duplicate event %s" % (event))
+        else:
+            self.__events[event] = event
+
+    def add_action(self, action):
+        if self.__actions.has_key(action):
+            raise FSMException("Duplicate action %s" % (action))
+        else:
+            self.__actions[action] = action
+
+    def set_default_state(self, state):
+        if self.__states.has_key(state):
+            self.__init_state = state
+            self.curr_state = state
+        else:
+            raise FSMException("Unknown state %s" % (state))
+
+    def set_default_event(self, event):
+        if self.__events.has_key(event):
+            self.__init_event = event
+        else:
+            raise FSMException("Unknown event %s" % (event))
+
     def __pre_dispatch(self, **kwargs):
         """
         The pre dispatch function.
@@ -205,7 +235,7 @@ class FSM(FSM_BASE):
 
         func = getattr(self.fsm_actions, self.curr_action)
 
-        if callable(func):
+        if self.callable(func):
             func(self.context)
         else:
             raise FSMException("Cannot find the action: " + str(func))
@@ -219,5 +249,5 @@ class FSM(FSM_BASE):
         if self.next_state != 'Same':
             self.curr_state = self.next_state
 
-def callable(func):
-    return hasattr(func, "__call__")
+    def callable(self,func):
+        return hasattr(func, "__call__")
