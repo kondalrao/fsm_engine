@@ -7,5 +7,6 @@ class FSMContext(object):
     """
 
     def __init__(self, fsm):
+        object.__init__(self)
         self.data = None
         self.fsm = fsm

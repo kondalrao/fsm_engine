@@ -22,6 +22,23 @@ class FSMProcess(FSM, Process):
         """
         return self.queue
 
+    def generate_local_event(self, event, data=None):
+        """
+
+        @param event:
+        @param data:
+        """
+        self.queue.put((event,data))
+
+
+    def generate_event(self, fsm, event, data=None):
+        """
+
+        @param event:
+        @param data:
+        """
+        fsm.get_queue().put((event,data))
+
     def run(self):
         """
 

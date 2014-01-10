@@ -5,7 +5,7 @@ from fsm_engine import FSMException
 class FSMResource(object):
 
     NONE = -1
-    TMR = 5
+    TIMER = 5
     SOCK = 10
     STDIN = 15
     STDOUT = 15
@@ -13,8 +13,8 @@ class FSMResource(object):
     OBJ = 50
     FSMQ = 99
 
-    def __init__(self):
-        self.type = FSMResource.NONE
+    def __init__(self, r_type=NONE):
+        self.type = r_type
 
     def dispatch(self, **kwargs):
         """
