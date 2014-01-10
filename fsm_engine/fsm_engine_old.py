@@ -2,7 +2,7 @@ __author__ = 'Kondal Rao Komaragiri'
 import multiprocessing
 import select
 import logging
-import fsm
+import FSM
 
 TIMEOUT = 5000
 
