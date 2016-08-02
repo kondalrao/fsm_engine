@@ -1,5 +1,7 @@
-fsm_engine
-==========
+Finite State Machine (FSM) Engine
+=================================
+
+This is an implementation of Finite State Machine in Python. There are many versions of this model but here is another version.
 
 The idea here to view each FSM as an independent container for processing events. These FSM containers can run in different threads/processes/nodes. Since the data and event are together, the event dispatch can send the pair to any FSM container. The trick here is to make sure that the FSM container doesn't maintiain any context of the data. So there is a centralized data/context repository which is used by the FSM containers and the event dispatch would just pick the context-event pair and send it to a free FSM container.
 
